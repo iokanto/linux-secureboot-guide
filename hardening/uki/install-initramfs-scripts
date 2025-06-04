@@ -1,0 +1,129 @@
+#!/bin/sh
+
+TARGET=/target
+
+
+cat > $TARGET/usr/local/sbin/generate-uki <<EOF
+#!/bin/sh
+
+set -e
+
+COMMAND="\${1:?}"
+KERNEL_VERSION="\${2:?}"
+if [ "\$COMMAND" = "add" ]; then
+    KERNEL_VMLINUZ="\${3:?}"
+    KERNEL_INITRD="\${4:?}"
+elif [ "\$COMMAND" = "add-entry" ]; then
+    EFI_DISK="\$(mount | grep "/boot/efi" | awk '{ print \$1 }')"
+fi
+
+KERNEL_CMDLINE="BOOT_IMAGE=/vmlinuz-\$KERNEL_VERSION root=/dev/mapper/devuan--vg-root ro"
+EFI_NAME="devuan-\$KERNEL_VERSION.efi"
+EFI_NAME_RECOVERY="devuan-\$KERNEL_VERSION-recovery.efi"
+
+
+case \$COMMAND in
+    "add")
+        # Decrypting Secure Boot keys
+        # TMP_KEY="\$(mktemp -p /usr/share/keyrings/efi/)"
+        # openssl rsa -in /usr/share/keyrings/efi/db.key -out "\$TMP_KEY"   2>/dev/null || \
+            { echo "E: initramfs-tools: Error decrypting signing key!" >&2; exit 1; }
+
+        # Generate signed EFI stub
+        mkdir -p /boot/efi/EFI/Linux/
+
+        /usr/lib/systemd/ukify build \
+            --linux="\$KERNEL_VMLINUZ" \
+            --initrd="\$KERNEL_INITRD" \
+            --cmdline="\$KERNEL_CMDLINE quiet" \
+            --uname="\$KERNEL_VERSION" \
+            --output="/boot/efi/EFI/Linux/\$EFI_NAME"
+
+        # Generating second UKI kernel for "Recovery mode"
+        #   I know, it's bad, but no ideas how load another profile directly from UEFI
+        /usr/lib/systemd/ukify build \
+            --linux="\$KERNEL_VMLINUZ" \
+            --initrd="\$KERNEL_INITRD" \
+            --cmdline="\$KERNEL_CMDLINE single" \
+            --uname="\$KERNEL_VERSION" \
+            --output="/boot/efi/EFI/Linux/\$EFI_NAME_RECOVERY"
+
+        # Append to BOTHER when Secure Boot will be setuped..
+        # --secureboot-private-key="\$TMP_KEY"
+        # --secureboot-certificate="/usr/share/keyrings/efi/db.crt"
+
+        # Deleting unencrypted sign key
+        # rm -v "\$TMP_KEY"
+
+        # For UEFI fallback
+        mkdir -p /boot/efi/EFI/BOOT/
+        cp /boot/efi/EFI/Linux/\$EFI_NAME /boot/efi/EFI/BOOT/BOOTX64.efi
+        ;;
+    "remove")
+        # Deleting old kernel
+        rm -v /boot/efi/EFI/Linux/\$EFI_NAME
+        rm -v /boot/efi/EFI/Linux/\$EFI_NAME_RECOVERY
+        ;;
+    "add-entry")
+        # Add boot entry
+        if [ "\$(efibootmgr | grep -c "\$KERNEL_VERSION")" -eq "0" ]; then
+            efibootmgr --create --disk "\$EFI_DISK" --label "Devuan \$KERNEL_VERSION (Recovery mode)" --loader "\EFI\Linux\\\\\$EFI_NAME_RECOVERY"    >/dev/null
+            efibootmgr --create --disk "\$EFI_DISK" --label "Devuan \$KERNEL_VERSION" --loader "\EFI\Linux\\\\\$EFI_NAME"    >/dev/null
+        fi
+        ;;
+    "remove-entry")
+        # Delete boot entry
+        if [ "\$(efibootmgr | grep -c "\$KERNEL_VERSION")" -eq "2" ]; then
+            for bootnum in \$(efibootmgr | grep \$KERNEL_VERSION | cut -c 5-8); do
+                efibootmgr -b \$bootnum -B    >/dev/null
+            done
+        fi
+        ;;
+    *)
+        exit 1
+        ;;
+esac
+
+EOF
+chmod 755 $TARGET/usr/local/sbin/generate-uki
+
+
+cat > $TARGET/etc/kernel/postrm.d/zz-ukify <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+else
+    version="\$1"
+fi
+
+# Remove kernel and boot entry after deleting from /boot
+/usr/local/sbin/generate-uki remove "\$version"
+/usr/local/sbin/generate-uki remove-entry "\$version"
+
+echo "I: initramfs-tools: Don't forget reseal TOTP secret in TPM after reboot!"
+
+EOF
+chmod 755 $TARGET/etc/kernel/postrm.d/zz-ukify
+
+
+mkdir -p $TARGET/etc/initramfs/post-update.d/
+cat > $TARGET/etc/initramfs/post-update.d/zz-ukify <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+else
+    version="\$1"
+fi
+
+# Build, sign EFI stub with ukify and add boot entry
+/usr/local/sbin/generate-uki add "\$version" "/boot/vmlinuz-\$version" "\$2"
+/usr/local/sbin/generate-uki add-entry "\$version"
+
+echo "I: initramfs-tools: Don't forget reseal TOTP secret in TPM after reboot!"
+
+EOF
+chmod 755 $TARGET/etc/initramfs/post-update.d/zz-ukify

@@ -1,0 +1,200 @@
+diff --git a/Makefile.am b/Makefile.am
+index a71e86b..21e6b83 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -189,11 +189,16 @@ EXTRA_DIST += dist/dracut/show-tpm2-totp.sh dist/dracut/cleanup-tpm2-totp.sh dis
+ 
+ if HAVE_INITRAMFSTOOLS
+ if HAVE_PLYMOUTH
++initramfstools_hooks_SCRIPTS = dist/initramfs-tools/hooks/plymouth-tpm2-totp
++initramfstools_scripts_SCRIPTS = dist/initramfs-tools/scripts/init-premount/plymouth-tpm2-totp
++else
++helpers_SCRIPTS = dist/show-tpm2-totp
+ initramfstools_hooks_SCRIPTS = dist/initramfs-tools/hooks/tpm2-totp
+ initramfstools_scripts_SCRIPTS = dist/initramfs-tools/scripts/init-premount/tpm2-totp
++initramfstools_scriptscleanup_SCRIPTS = dist/initramfs-tools/scripts/local-bottom/cleanup-tpm2-totp
+ endif # HAVE_PLYMOUTH
+ endif # HAVE_INITRAMFSTOOLS
+-EXTRA_DIST += dist/initramfs-tools/scripts/init-premount/tpm2-totp
++EXTRA_DIST += dist/initramfs-tools/scripts/init-premount/plymouth-tpm2-totp dist/initramfs-tools/scripts/init-premount/tpm2-totp dist/initramfs-tools/scripts/local-bottom/cleanup-tpm2-totp
+ 
+ if HAVE_MKINITCPIO
+ helpers_SCRIPTS = dist/show-tpm2-totp
+diff --git a/configure.ac b/configure.ac
+index a06c84e..8e8d409 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -46,6 +46,11 @@ AC_SUBST([helpersdir])
+ AX_RECURSIVE_EVAL([$helpersdir], [HELPERSDIR])
+ AC_SUBST([HELPERSDIR])
+ 
++installdir="$bindir"
++AC_SUBST([installdir])
++AX_RECURSIVE_EVAL([$installdir], [INSTALLDIR])
++AC_SUBST([INSTALLDIR])
++
+ AC_CONFIG_FILES([Makefile Doxyfile dist/tpm2-totp.pc])
+ 
+ AC_ARG_ENABLE([defaultflags],
+@@ -128,8 +133,9 @@ AM_CONDITIONAL(HAVE_INITRAMFSTOOLS, [test -n "$with_initramfstoolsdir" -a "x$wit
+ AM_COND_IF([HAVE_INITRAMFSTOOLS],
+            [AC_SUBST([initramfstools_hooksdir], [$with_initramfstoolsdir/hooks])
+             AC_SUBST([initramfstools_scriptsdir], [$with_initramfstoolsdir/scripts/init-premount])
++            AC_SUBST([initramfstools_scriptscleanupdir], [$with_initramfstoolsdir/scripts/local-bottom])
+ ])
+-AC_CONFIG_FILES([dist/initramfs-tools/hooks/tpm2-totp])
++AC_CONFIG_FILES([dist/initramfs-tools/hooks/plymouth-tpm2-totp dist/initramfs-tools/hooks/tpm2-totp])
+ 
+ AC_CHECK_PROG([mkinitcpio], [mkinitcpio], [yes])
+ AC_ARG_WITH([mkinitcpiodir],
+diff --git a/dist/initramfs-tools/hooks/plymouth-tpm2-totp.in b/dist/initramfs-tools/hooks/plymouth-tpm2-totp.in
+new file mode 100644
+index 0000000..2e32f19
+--- /dev/null
++++ b/dist/initramfs-tools/hooks/plymouth-tpm2-totp.in
+@@ -0,0 +1,19 @@
++#!/bin/sh
++
++PREREQ='plymouth'
++prereqs() {
++    echo "$PREREQ"
++}
++
++case $1 in
++    prereqs)
++        prereqs
++        exit 0
++        ;;
++esac
++
++. /usr/share/initramfs-tools/hook-functions
++
++copy_exec @HELPERSDIR@/plymouth-tpm2-totp /bin
++copy_exec @TSS2_TCTI_DEVICE_LIBDIR@/libtss2-tcti-device.so.0
++copy_modules_dir kernel/drivers/char/tpm
+diff --git a/dist/initramfs-tools/hooks/tpm2-totp.in b/dist/initramfs-tools/hooks/tpm2-totp.in
+old mode 100644
+new mode 100755
+index 2e32f19..c065958
+--- a/dist/initramfs-tools/hooks/tpm2-totp.in
++++ b/dist/initramfs-tools/hooks/tpm2-totp.in
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ 
+-PREREQ='plymouth'
++PREREQ=''
+ prereqs() {
+     echo "$PREREQ"
+ }
+@@ -14,6 +14,18 @@ esac
+ 
+ . /usr/share/initramfs-tools/hook-functions
+ 
+-copy_exec @HELPERSDIR@/plymouth-tpm2-totp /bin
++# Some check before generating initramfs
++if [ ! -x "@INSTALLDIR@/tpm2-totp" ]; then
++    echo "E: initramfs-tools: 'tpm2-totp' not installed in system!"    >&2
++    exit 1
++fi
++
++# Add binaries for show-tpm2-totp
++copy_exec @INSTALLDIR@/tpm2-totp /bin
++copy_exec $(command -v date) /bin
++
++# Add script, which executed in initramfs and show TOTP codes
++copy_exec @HELPERSDIR@/show-tpm2-totp /bin
++# Add depends for tpm2-totp, which executed in show-tpm2-totp
+ copy_exec @TSS2_TCTI_DEVICE_LIBDIR@/libtss2-tcti-device.so.0
+ copy_modules_dir kernel/drivers/char/tpm
+diff --git a/dist/initramfs-tools/scripts/init-premount/plymouth-tpm2-totp b/dist/initramfs-tools/scripts/init-premount/plymouth-tpm2-totp
+new file mode 100644
+index 0000000..5527aeb
+--- /dev/null
++++ b/dist/initramfs-tools/scripts/init-premount/plymouth-tpm2-totp
+@@ -0,0 +1,23 @@
++#!/bin/sh
++
++PREREQ='plymouth'
++prereqs() {
++    echo "$PREREQ"
++}
++
++case $1 in
++    prereqs)
++        prereqs
++        exit 0
++        ;;
++esac
++
++for arg in $(cat /proc/cmdline); do
++    case "$arg" in
++        rd.tpm2-totp.nvindex=*)
++            nvindex="${arg#rd.tpm2-totp.nvindex=}"
++            ;;
++    esac
++done
++
++/bin/plymouth-tpm2-totp ${nvindex:+--nvindex "$nvindex"} &
+diff --git a/dist/initramfs-tools/scripts/init-premount/tpm2-totp b/dist/initramfs-tools/scripts/init-premount/tpm2-totp
+old mode 100644
+new mode 100755
+index 5527aeb..3633dd6
+--- a/dist/initramfs-tools/scripts/init-premount/tpm2-totp
++++ b/dist/initramfs-tools/scripts/init-premount/tpm2-totp
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ 
+-PREREQ='plymouth'
++PREREQ=''
+ prereqs() {
+     echo "$PREREQ"
+ }
+@@ -12,6 +12,7 @@ case $1 in
+         ;;
+ esac
+ 
++# Get nvindex from cmdline
+ for arg in $(cat /proc/cmdline); do
+     case "$arg" in
+         rd.tpm2-totp.nvindex=*)
+@@ -20,4 +21,6 @@ for arg in $(cat /proc/cmdline); do
+     esac
+ done
+ 
+-/bin/plymouth-tpm2-totp ${nvindex:+--nvindex "$nvindex"} &
++# Execute script in initramfs
++/bin/show-tpm2-totp ${nvindex:+--nvindex "$nvindex"} &
++echo $! > /tmp/show-tpm2-totp.pid
+diff --git a/dist/initramfs-tools/scripts/local-bottom/cleanup-tpm2-totp b/dist/initramfs-tools/scripts/local-bottom/cleanup-tpm2-totp
+new file mode 100755
+index 0000000..0054d9e
+--- /dev/null
++++ b/dist/initramfs-tools/scripts/local-bottom/cleanup-tpm2-totp
+@@ -0,0 +1,16 @@
++#!/bin/sh
++
++PREREQ=''
++prereqs() {
++    echo "$PREREQ"
++}
++
++case $1 in
++    prereqs)
++        prereqs
++        exit 0
++        ;;
++esac
++
++# Clean up tpm2-totp script
++kill -s 9 "$(cat /tmp/show-tpm2-totp.pid)" 2>/dev/null
+diff --git a/dist/show-tpm2-totp b/dist/show-tpm2-totp
+index c2104f6..eaa1743 100755
+--- a/dist/show-tpm2-totp
++++ b/dist/show-tpm2-totp
+@@ -1,4 +1,6 @@
+ #!/bin/sh
++# Wait for some TPM devices have been initializated..
++sleep 3
+ while true; do
+     totp="$(tpm2-totp --time "$@" show)" || break
+     printf '\n%s\n' "$totp"

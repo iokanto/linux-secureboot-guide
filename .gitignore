@@ -1,0 +1,5 @@
+hardening/secureboot/keys/
+hardening/secureboot/*.der
+system/*
+!system/update-apt
+*.txt

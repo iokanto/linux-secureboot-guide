@@ -1,0 +1,632 @@
+diff --git a/src/libtpm2-totp.c b/src/libtpm2-totp.c
+index 636d46f..31e0124 100644
+--- a/src/libtpm2-totp.c
++++ b/src/libtpm2-totp.c
+@@ -117,6 +117,7 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+                      uint8_t **secret, size_t *secret_size,
+                      uint8_t **keyBlob, size_t *keyBlob_size)
+ {
++    dbg("Enter in tpm2totp_generateKey func");
+     if (secret == NULL || secret_size == NULL ||
+         keyBlob == NULL || keyBlob_size == NULL) {
+         return -1;
+@@ -173,9 +174,11 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+         return -1;
+     }
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
+@@ -199,6 +202,7 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+                             &primary, NULL, NULL, NULL, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_PCR_Read");
+     rc = Esys_PCR_Read(ctx,
+                        ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                        &pcrsel, NULL, &pcrcheck, NULL);
+@@ -210,20 +214,25 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+     }
+     free(pcrcheck);
+ 
++    dbg("\tCalling Esys_StartAuthSession");
+     rc = Esys_StartAuthSession(ctx, ESYS_TR_NONE, ESYS_TR_NONE,
+                     ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                     NULL, TPM2_SE_POLICY, &sym, TPM2_ALG_SHA256,
+                     &session);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_PolicyPCR");
+     rc = Esys_PolicyPCR(ctx, session,
+                         ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                         NULL, &pcrsel);
++    dbg("\tCalling Esys_FlushContext");
+     chkrc(rc, Esys_FlushContext(ctx, session); goto error);
+ 
++    dbg("\tCalling Esys_PolicyGetDigest");
+     rc = Esys_PolicyGetDigest(ctx, session,
+                               ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                               &policyDigest);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, session);
+     chkrc(rc, goto error);
+ 
+@@ -234,11 +243,13 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+     memcpy(&keySensitive.sensitive.data.buffer[0], &(*secret)[0],
+            *secret_size);
+ 
++    dbg("\tCalling Esys_Create");
+     rc = Esys_Create(ctx, primary,
+                      ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                      &keySensitive, &keyInPublicHmac,
+                      &allOutsideInfo, &allCreationPCR,
+                      &keyPrivateHmac, &keyPublicHmac, NULL, NULL, NULL);
++    dbg("\t\tPossible calling Esys_FlushContext in chkrc(..) macros");
+     chkrc(rc, Esys_FlushContext(ctx, primary); goto error);
+ 
+     if (password && strlen(password) > 0) {
+@@ -247,50 +258,65 @@ tpm2totp_generateKey(uint32_t pcrs, uint32_t banks, const char *password,
+             memcpy(&keySensitive.sensitive.userAuth.buffer[0], password,
+                    keySensitive.sensitive.userAuth.size);
+ 
++        dbg("\t\tCalling Esys_Create in password && `complex` block");
+         rc = Esys_Create(ctx, primary,
+                          ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                          &keySensitive, &keyInPublicSeal,
+                          &allOutsideInfo, &allCreationPCR,
+                          &keyPrivateSeal, &keyPublicSeal, NULL, NULL, NULL);
++        dbg("\t\tCalling Esys_FlushContext in password && `complex` block");
+         chkrc(rc, Esys_FlushContext(ctx, primary); goto error);
+     }
+ 
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, primary);
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
+     *keyBlob_size = 4 + 4;
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal");
+     rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicHmac, NULL, -1, keyBlob_size);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal");
+     rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateHmac, NULL, -1, keyBlob_size);
+     chkrc(rc, goto error);
+     if (password && strlen(password) > 0) {
++        dbg("\t\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicSeal, NULL, -1, keyBlob_size);
+         chkrc(rc, goto error);
++        dbg("\t\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateSeal, NULL, -1, keyBlob_size);
+         chkrc(rc, goto error);
+     }
+ 
+     *keyBlob = malloc(*keyBlob_size);
+ 
++    dbg("\tCalling Tss2_MU_UINT32_Marshal");
+     rc = Tss2_MU_UINT32_Marshal(pcrs, *keyBlob, *keyBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_UINT32_Marshal");
+     rc = Tss2_MU_UINT32_Marshal(banks, *keyBlob, *keyBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal");
+     rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicHmac,
+                                       *keyBlob, *keyBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal");
+     rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateHmac,
+                                        *keyBlob, *keyBlob_size, &off);
+     chkrc(rc, goto error_marshall);
+     if (password && strlen(password) > 0) {
++        dbg("\t\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicSeal,
+                                           *keyBlob, *keyBlob_size, &off);
+         chkrc(rc, goto error_marshall);
++        dbg("\t\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateSeal,
+                                            *keyBlob, *keyBlob_size, &off);
+         chkrc(rc, goto error_marshall);
+     }
+ 
++    dbg("Seems to be OK in tpm2totp_generateKey func");
+     return 0;
+ 
+ error_marshall:
+@@ -332,6 +358,8 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+                 TSS2_TCTI_CONTEXT *tcti_context,
+                 uint8_t **newBlob, size_t *newBlob_size)
+ {
++    dbg("Enter in tpm2totp_reseal func");
++    dbg("\tLoaded keyBlob_size %lu, newBlob_size %lu", keyBlob_size, *newBlob_size);
+     if (keyBlob == NULL || !password || newBlob == NULL || newBlob_size == NULL) {
+         return -1;
+     }
+@@ -389,13 +417,17 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+     memcpy(&auth.buffer[0], password, auth.size);
+ 
+     /* We skip over the pcrs and banks from NV because they are not trustworthy */
++    dbg("\tCalling Tss2_MU_UINT32_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_UINT32_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_UINT32_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_UINT32_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
+ 
+@@ -404,9 +436,11 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+         return -20;
+     }
+ 
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off,
+                                         &keyPublicSeal);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off,
+                                          &keyPrivateSeal);
+     chkrc(rc, goto error);
+@@ -416,12 +450,15 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+         return -1;
+     }
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_CreatePrimary");
+     rc = Esys_CreatePrimary(ctx, ESYS_TR_RH_OWNER,
+                             ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                             &primarySensitive, &primaryPublic,
+@@ -429,20 +466,25 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+                             &primary, NULL, NULL, NULL, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Load");
+     rc = Esys_Load(ctx, primary,
+                    ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                    &keyPrivateSeal, &keyPublicSeal,
+                    &key);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_TR_SetAuth");
+     Esys_TR_SetAuth(ctx, key, &auth);
+ 
++    dbg("\tCalling Esys_Unseal");
+     rc = Esys_Unseal(ctx, key,
+                      ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                      &secret2b);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, key);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_PCR_Read");
+     rc = Esys_PCR_Read(ctx,
+                        ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                        &pcrsel, NULL, &pcrcheck, NULL);
+@@ -454,20 +496,25 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+     }
+     free(pcrcheck);
+ 
++    dbg("\tCalling Esys_StartAuthSession");
+     rc = Esys_StartAuthSession(ctx, ESYS_TR_NONE, ESYS_TR_NONE,
+                     ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                     NULL, TPM2_SE_POLICY, &sym, TPM2_ALG_SHA256,
+                     &session);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_PolicyPCR");
+     rc = Esys_PolicyPCR(ctx, session,
+                         ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                         NULL, &pcrsel);
++    dbg("\t\tPossible calling Esys_FlushContext in chkrc(..) macros");
+     chkrc(rc, Esys_FlushContext(ctx, session); goto error);
+ 
++    dbg("\tCalling Esys_PolicyGetDigest");
+     rc = Esys_PolicyGetDigest(ctx, session,
+                               ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                               &policyDigest);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, session);
+     chkrc(rc, goto error);
+ 
+@@ -479,23 +526,30 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+            keySensitive.sensitive.data.size);
+     free(secret2b);
+ 
++    dbg("\tCalling Esys_Create");
+     rc = Esys_Create(ctx, primary,
+                      ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                      &keySensitive, &keyInPublicHmac,
+                      &allOutsideInfo, &allCreationPCR,
+                      &keyPrivateHmac, &keyPublicHmac, NULL, NULL, NULL);
+     chkrc(rc, goto error);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, primary);
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
+     *newBlob_size = 4 + 4;
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal");
+     rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicHmac, NULL, -1, newBlob_size);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal");
+     rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateHmac, NULL, -1, newBlob_size);
+     chkrc(rc, goto error);
+     if (password && strlen(password) > 0) {
++        dbg("\t\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PUBLIC_Marshal(&keyPublicSeal, NULL, -1, newBlob_size);
+         chkrc(rc, goto error);
++        dbg("\t\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal in password && .. block");
+         rc = Tss2_MU_TPM2B_PRIVATE_Marshal(&keyPrivateSeal, NULL, -1, newBlob_size);
+         chkrc(rc, goto error);
+     }
+@@ -503,19 +557,25 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+     *newBlob = malloc(*newBlob_size);
+     off = 0;
+ 
++    dbg("\tCalling Tss2_MU_UINT32_Marshal");
+     rc = Tss2_MU_UINT32_Marshal(pcrs, *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_UINT32_Marshal");
+     rc = Tss2_MU_UINT32_Marshal(banks, *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal");
+     rc = Tss2_MU_TPM2B_PUBLIC_Marshal(keyPublicHmac,
+                                       *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal");
+     rc = Tss2_MU_TPM2B_PRIVATE_Marshal(keyPrivateHmac,
+                                        *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Marshal");
+     rc = Tss2_MU_TPM2B_PUBLIC_Marshal(&keyPublicSeal,
+                                       *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Marshal");
+     rc = Tss2_MU_TPM2B_PRIVATE_Marshal(&keyPrivateSeal,
+                                        *newBlob, *newBlob_size, &off);
+     chkrc(rc, goto error_marshall);
+@@ -523,6 +583,7 @@ tpm2totp_reseal(const uint8_t *keyBlob, size_t keyBlob_size,
+     free(keyPublicHmac);
+     free(keyPrivateHmac);
+ 
++    dbg("Seems to be OK in tpm2totp_reseal func");
+     return 0;
+ 
+ error_marshall:
+@@ -556,6 +617,7 @@ int
+ tpm2totp_storeKey_nv(const uint8_t *keyBlob, size_t keyBlob_size, uint32_t nv,
+                      TSS2_TCTI_CONTEXT *tcti_context)
+ {
++    dbg("Enter in tpm2totp_storeKey_nv func");
+     if (!keyBlob)
+         return -1;
+ 
+@@ -586,25 +648,32 @@ tpm2totp_storeKey_nv(const uint8_t *keyBlob, size_t keyBlob_size, uint32_t nv,
+     }
+     memcpy(&blob.buffer[0], keyBlob, blob.size);
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, return rc);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_NV_DefineSpace");
+     rc = Esys_NV_DefineSpace(ctx, ESYS_TR_RH_OWNER,
+                              ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                              &emptyAuth, &publicInfo, &nvHandle);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_NV_Write");
+     rc = Esys_NV_Write(ctx, nvHandle, nvHandle,
+                        ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                        &blob, 0/*=offset*/);
++    dbg("\tCalling Esys_TR_Close");
+     Esys_TR_Close(ctx, &nvHandle);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
++    dbg("Seems to be OK in tpm2totp_storeKey_nv func");
+     return 0;
+ 
+ error:
+@@ -627,6 +696,7 @@ int
+ tpm2totp_loadKey_nv(uint32_t nv, TSS2_TCTI_CONTEXT *tcti_context,
+                     uint8_t **keyBlob, size_t *keyBlob_size)
+ {
++    dbg("Enter in tpm2totp_loadKey_nv func");
+     TSS2_RC rc;
+     ESYS_CONTEXT *ctx;
+     ESYS_TR nvHandle;
+@@ -635,35 +705,44 @@ tpm2totp_loadKey_nv(uint32_t nv, TSS2_TCTI_CONTEXT *tcti_context,
+ 
+     if (!nv) nv = DEFAULT_NV; /* Some random handle from owner space */
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, return rc);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_TR_FromTPMPublic");
+     rc = Esys_TR_FromTPMPublic(ctx, nv,
+                                ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                                &nvHandle);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_NV_ReadPublic");
+     rc = Esys_NV_ReadPublic(ctx, nvHandle,
+                             ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                             &publicInfo, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_NV_Read");
+     rc = Esys_NV_Read(ctx, nvHandle, nvHandle,
+                       ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                       publicInfo->nvPublic.dataSize, 0/*=offset*/, &blob);
++    dbg("\tCalling Esys_TR_Close");
+     Esys_TR_Close(ctx, &nvHandle);
+     free(publicInfo);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
+     *keyBlob_size = blob->size;
+     *keyBlob = malloc(blob->size);
+     memcpy(*keyBlob, &blob->buffer[0], *keyBlob_size);
+ 
++	dbg("\tLoaded from nv-index 0x%x keyBlob_size %lu", nv, *keyBlob_size);
++    dbg("Seems te be OK in tpm2totp_loadKey_nv func");
+     return 0;
+ 
+ error:
+@@ -684,29 +763,37 @@ error:
+ int
+ tpm2totp_deleteKey_nv(uint32_t nv, TSS2_TCTI_CONTEXT *tcti_context)
+ {
++    dbg("Enter in tpm2totp_deleteKey_nv func");
+     TSS2_RC rc;
+     ESYS_CONTEXT *ctx;
+     ESYS_TR nvHandle;
+ 
+     if (!nv) nv = DEFAULT_NV; /* Some random handle from owner space */
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, return rc);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_TR_FromTPMPublic");
+     rc = Esys_TR_FromTPMPublic(ctx, nv,
+                                ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                                &nvHandle);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_NV_UndefineSpace");
+     rc = Esys_NV_UndefineSpace(ctx, ESYS_TR_RH_OWNER, nvHandle,
+                                ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE);
++    dbg("\t\tPossible calling Esys_TR_Close in chkrc(..) macros");
+     chkrc(rc, Esys_TR_Close(ctx, &nvHandle); goto error);
+ 
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
++    dbg("Seems te be OK in tpm2totp_deleteKey_nv func");
+     return 0;
+ 
+ error:
+@@ -732,10 +819,12 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+                    TSS2_TCTI_CONTEXT *tcti_context,
+                    time_t *nowp, uint64_t *otp)
+ {
++    dbg("Enter in tpm2totp_calculate func");
+     if (keyBlob == NULL || otp == NULL) {
+         return -1;
+     }
+ 
++	dbg("\tLoaded keyBlob_size %lu", keyBlob_size);
+     ESYS_CONTEXT *ctx = NULL;
+     ESYS_TR primary, key, session;
+     TSS2_RC rc;
+@@ -758,19 +847,25 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+                         .mode = {.aes = TPM2_ALG_CFB}
+     };
+ 
++    dbg("\tCalling Tss2_MU_UINT32_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_UINT32_Unmarshal(keyBlob, keyBlob_size, &off, &pcrs);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_UINT32_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_UINT32_Unmarshal(keyBlob, keyBlob_size, &off, &banks);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off, &keyPublic);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off,
+                                          &keyPrivate);
+     chkrc(rc, goto error);
+ 
+     if (off != keyBlob_size) {
++        dbg("\t\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal in off != keyBlob_size block with offset %lu", off);
+         rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+         chkrc(rc, goto error);
++        dbg("\t\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal in off != keyBlob_size block with offset %lu", off);
+         rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+         chkrc(rc, goto error);
+     }
+@@ -800,12 +895,15 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+         pcrsel.pcrSelections[i].pcrSelect[2] = pcrs >>16 & 0xff;
+     }
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_CreatePrimary");
+     rc = Esys_CreatePrimary(ctx, ESYS_TR_RH_OWNER,
+                             ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                             &primarySensitive, &primaryPublic,
+@@ -813,22 +911,27 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+                             &primary, NULL, NULL, NULL, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Load");
+     rc = Esys_Load(ctx, primary,
+                    ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                    &keyPrivate, &keyPublic,
+                    &key);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, primary);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_StartAuthSession");
+     rc = Esys_StartAuthSession(ctx, ESYS_TR_NONE, ESYS_TR_NONE,
+                     ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                     NULL, TPM2_SE_POLICY, &sym, TPM2_ALG_SHA256,
+                     &session);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_PolicyPCR");
+     rc = Esys_PolicyPCR(ctx, session,
+                         ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                         NULL, &pcrsel);
++    dbg("\t\tPossible calling Esys_FlushContext in chkrc(..) macros");
+     chkrc(rc, Esys_FlushContext(ctx, session); goto error);
+ 
+     /* Construct the RFC 6238 input */
+@@ -838,13 +941,16 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+     input.size = sizeof(tmp);
+     memcpy(&input.buffer[0], ((void*)&tmp), input.size);
+ 
++    dbg("\tCalling Esys_HMAC");
+     rc = Esys_HMAC(ctx, key,
+                    session, ESYS_TR_NONE, ESYS_TR_NONE,
+                    &input, TPM2_ALG_SHA1, &output);
++    dbg("\tCalling TWICE Esys_FlushContext");
+     Esys_FlushContext(ctx, session);
+     Esys_FlushContext(ctx, key);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
+     if (output->size != 20) {
+@@ -865,6 +971,7 @@ tpm2totp_calculate(const uint8_t *keyBlob, size_t keyBlob_size,
+ 
+     if (nowp) *nowp = now;
+ 
++    dbg("Seems to be OK in tpm2totp_calculate func");
+     return 0;
+ error:
+     Esys_Finalize(&ctx);
+@@ -890,6 +997,7 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+                    const char *password, TSS2_TCTI_CONTEXT *tcti_context,
+                    uint8_t **secret, size_t *secret_size)
+ {
++    dbg("Enter in tpm2totp_getSecret func");
+     if (keyBlob == NULL || !password || secret == NULL || secret_size == NULL) {
+         return -1;
+     }
+@@ -910,8 +1018,10 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+     auth.size = strlen(password);
+     memcpy(&auth.buffer[0], password, auth.size);
+ 
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off, NULL);
+     chkrc(rc, goto error);
+ 
+@@ -920,8 +1030,10 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+         return -20;
+     }
+ 
++    dbg("\tCalling Tss2_MU_TPM2B_PUBLIC_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(keyBlob, keyBlob_size, &off, &keyPublic);
+     chkrc(rc, goto error);
++    dbg("\tCalling Tss2_MU_TPM2B_PRIVATE_Unmarshal with offset %lu", off);
+     rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(keyBlob, keyBlob_size, &off,
+                                          &keyPrivate);
+     chkrc(rc, goto error);
+@@ -931,12 +1043,15 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+         return -1;
+     }
+ 
++    dbg("\tCalling Esys_Initialize");
+     rc = Esys_Initialize(&ctx, tcti_context, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Startup");
+     rc = Esys_Startup(ctx, TPM2_SU_CLEAR);
+     if (rc != TPM2_RC_INITIALIZE) chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_CreatePrimary");
+     rc = Esys_CreatePrimary(ctx, ESYS_TR_RH_OWNER,
+                             ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                             &primarySensitive, &primaryPublic,
+@@ -944,21 +1059,27 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+                             &primary, NULL, NULL, NULL, NULL);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Load");
+     rc = Esys_Load(ctx, primary,
+                    ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                    &keyPrivate, &keyPublic,
+                    &key);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, primary);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_TR_SetAuth");
+     Esys_TR_SetAuth(ctx, key, &auth);
+ 
++    dbg("\tCalling Esys_Unseal");
+     rc = Esys_Unseal(ctx, key,
+                      ESYS_TR_PASSWORD, ESYS_TR_NONE, ESYS_TR_NONE,
+                      &secret2b);
++    dbg("\tCalling Esys_FlushContext");
+     Esys_FlushContext(ctx, key);
+     chkrc(rc, goto error);
+ 
++    dbg("\tCalling Esys_Finalize");
+     Esys_Finalize(&ctx);
+ 
+     *secret = malloc(secret2b->size);
+@@ -967,6 +1088,7 @@ tpm2totp_getSecret(const uint8_t *keyBlob, size_t keyBlob_size,
+     *secret_size = secret2b->size;
+     memcpy(&(*secret)[0], &secret2b->buffer[0], *secret_size);
+ 
++    dbg("Seems to be OK in tpm2totp_getSecret func");
+     return 0;
+ error:
+     Esys_Finalize(&ctx);

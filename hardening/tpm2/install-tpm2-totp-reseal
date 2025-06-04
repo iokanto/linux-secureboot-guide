@@ -1,0 +1,53 @@
+#!/bin/sh
+
+cat > /usr/local/sbin/tpm2-totp-reseal <<EOF
+#!/bin/sh
+
+DEFAULT_SECRET_FILE="/usr/share/keyrings/efi/totpsecret"
+DEFAULT_ARGS="-b SHA256 -p 0,1,2,3,4,5,7,9,11,13,14"
+SECRET_SIZE=20
+
+
+# Promting password
+if [ -z "\$TPM_KEY" ]; then
+    printf 'Enter pass phrase for (en/de)crypting TOTP secret in file/TPM: '
+
+    stty -echo
+    trap 'stty echo' INT
+    read -r TPM_KEY
+    stty echo
+    printf '\n'
+fi
+
+# Generating new TOTP secret
+if [ ! -f "\$DEFAULT_SECRET_FILE" ]; then
+	echo "\$DEFAULT_SECRET_FILE doesn't exist! Generating new TOTP secret via /dev/urandom"
+	dd if=/dev/urandom bs="\$SECRET_SIZE" count=1 status=none | base32 > "\$DEFAULT_SECRET_FILE"
+	printf '%s\n' "\$TPM_KEY" \
+		| openssl enc -pass stdin -aes-256-cbc -md sha512 -pbkdf2 -salt -in "\$DEFAULT_SECRET_FILE" -out "\$DEFAULT_SECRET_FILE.enc"
+	mv "\$DEFAULT_SECRET_FILE.enc" "\$DEFAULT_SECRET_FILE"
+fi
+
+# Promting for alternative args if needed
+printf "Default args for resealing '%s'\nEnter new if needed: " "\$DEFAULT_ARGS"
+read -r NEW_ARGS
+if [ -n "\$NEW_ARGS" ]; then
+	DEFAULT_ARGS="\$NEW_ARGS"
+fi
+
+# Decrypting TOTP secret
+printf '%s\n' "\$TPM_KEY" \
+	| openssl enc -d -pass stdin -aes-256-cbc -md sha512 -pbkdf2 -salt -in "\$DEFAULT_SECRET_FILE" -out "\$DEFAULT_SECRET_FILE.dec" \
+	    2>/dev/null || { echo "E: tpm2-totp-reseal: Error decrypting TOTP secret!"; rm "\$DEFAULT_SECRET_FILE.dec"; exit 1; }
+
+# Resealing TPM via tpm2-totp
+tpm2-totp clean    >/dev/null 2>&1
+printf '%s\n' "\$TPM_KEY" \
+	| tpm2-totp -P - \$DEFAULT_ARGS -s "\$(cat \$DEFAULT_SECRET_FILE.dec)" init \
+	    >/dev/null 2>&1 || { echo "E: tpm2-totp-reseal: Error init new TOTP secret!"; rm "\$DEFAULT_SECRET_FILE.dec"; exit 1; }
+rm "\$DEFAULT_SECRET_FILE.dec"
+
+unset TPM_KEY
+
+EOF
+chmod 755 /usr/local/sbin/tpm2-totp-reseal

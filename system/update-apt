@@ -1,0 +1,144 @@
+#!/bin/sh
+
+TARGET=/target
+
+
+cat > $TARGET/etc/apt/sources.list <<EOF
+deb https://devuan.sedf.de/merged                               daedalus           main contrib non-free non-free-firmware
+deb https://pkgmaster.devuan.org/merged/                        daedalus-backports main contrib non-free non-free-firmware
+deb https://sledjhamr.org/devuan/merged/                        excalibur          main
+deb https://devuan.planetcobalt.net/merged/                     daedalus-updates   main contrib non-free non-free-firmware
+deb https://mirror.ungleich.ch/mirror/packages/devuan/merged    daedalus-security  main contrib non-free non-free-firmware
+EOF
+
+
+cat > $TARGET/etc/apt/preferences.d/testing-packages <<EOF
+Package: *
+Pin: release n=excalibur
+Pin-Priority: -1
+
+Package: systemd-boot-efi
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: systemd-ukify
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: dnscrypt-proxy
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: tuned
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: xsecurelock
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: bash-completion
+Pin: release n=excalibur
+Pin-Priority: 500
+
+Package: micro
+Pin: release n=excalibur
+Pin-Priority: 500
+EOF
+
+
+cat > $TARGET/etc/apt/preferences.d/backports-packages <<EOF
+Package: *
+Pin: release n=daedalus-backports
+Pin-Priority: -1
+
+Package: tpm2-tss-engine-dev
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: libengine-tpm2-tss-openssl
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-cpupower
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: libcpupower1
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-perf
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: dunst
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: 7zip
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: 7zip-rar
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+EOF
+
+
+cat > $TARGET/etc/apt/preferences.d/backports-kernel <<EOF
+Package: *
+Pin: release n=daedalus-backports
+Pin-Priority: -1
+
+Package: linux-image-amd64
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-image-6.12.22+bpo-amd64
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-headers-6.12.22+bpo-amd64
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-headers-6.12.22+bpo-common
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: linux-kbuild-6.12.22+bpo
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+EOF
+
+
+cat > $TARGET/etc/apt/preferences.d/backports-firmware <<EOF
+Package: *
+Pin: release n=daedalus-backports
+Pin-Priority: -1
+
+Package: firmware-linux
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: firmware-linux-nonfree
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: firmware-amd-graphics
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: firmware-misc-nonfree
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: firmware-mediatek
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+
+Package: firmware-realtek
+Pin: release n=daedalus-backports
+Pin-Priority: 500
+EOF
