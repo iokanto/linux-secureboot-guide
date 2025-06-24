@@ -71,6 +71,8 @@ Add initramfs scripts
 ./mnt/linux-secureboot-guide/hardening/uki/install-initramfs-scripts
 ```
 
+In /etc/fstab add to `/boot/efi` line `noauto` param for not mounting partition after start
+
 Unmount drive
 ```
 umount /mnt

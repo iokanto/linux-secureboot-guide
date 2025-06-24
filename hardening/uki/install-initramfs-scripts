@@ -127,3 +127,83 @@ echo "I: initramfs-tools: Don't forget reseal TOTP secret in TPM after reboot!"
 
 EOF
 chmod 755 $TARGET/etc/initramfs/post-update.d/zz-ukify
+
+
+cat > $TARGET/etc/kernel/preinst.d/00-mount <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+fi
+
+# Mount /boot/efi partition, if needed
+if [ "\$(mount | grep /boot/efi)" = "" ]; then
+    if ! mount /boot/efi >/dev/null 2>&1; then
+        echo "E: initramfs-tools: unpossible find and mount /boot/efi partition" >&2
+        exit 1
+    fi
+fi
+
+EOF
+chmod 755 $TARGET/etc/kernel/preinst.d/00-mount
+
+
+cat > $TARGET/etc/kernel/postinst.d/zz-umount <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+fi
+
+# Umount /boot/efi partition, if needed
+if [ "\$(mount | grep /boot/efi)" != "" ]; then
+    if ! umount /boot/efi >/dev/null 2>&1; then
+        echo "E: initramfs-tools: unpossible umount /boot/efi partition" >&2
+        exit 1
+    fi
+fi
+
+EOF
+chmod 755 $TARGET/etc/kernel/postinst.d/zz-umount
+
+
+cat > $TARGET/etc/kernel/prerm.d/00-mount <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+fi
+
+# Mount /boot/efi partition, if needed
+if [ "\$(mount | grep /boot/efi)" = "" ]; then
+    if ! mount /boot/efi >/dev/null 2>&1; then
+        echo "E: initramfs-tools: unpossible find and mount /boot/efi partition" >&2
+        exit 1
+    fi
+fi
+
+EOF
+chmod 755 $TARGET/etc/kernel/prerm.d/00-mount
+
+
+cat > $TARGET/etc/kernel/postrm.d/zz-umount <<EOF
+#!/bin/sh
+
+if [ -z "\${1:-}" ]; then
+    echo "E: initramfs-tools: \${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a version number" >&2
+    exit 1
+fi
+
+# Umount /boot/efi partition, if needed
+if [ "\$(mount | grep /boot/efi)" != "" ]; then
+    if ! umount /boot/efi >/dev/null 2>&1; then
+        echo "E: initramfs-tools: unpossible umount /boot/efi partition" >&2
+        exit 1
+    fi
+fi
+
+EOF
+chmod 755 $TARGET/etc/kernel/postrm.d/zz-umount
