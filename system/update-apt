@@ -102,6 +102,10 @@ Pin-Priority: 500
 Package: linux-kbuild-*
 Pin: release n=daedalus-backports
 Pin-Priority: 500
+
+Package: linux-base
+Pin: release n=daedalus-backports
+Pin-Priority: 500
 EOF
 
 
