@@ -4,137 +4,177 @@ TARGET=/target
 
 
 cat > $TARGET/etc/apt/sources.list <<EOF
-deb https://devuan.sedf.de/merged                               daedalus           main contrib non-free non-free-firmware
-deb https://pkgmaster.devuan.org/merged/                        daedalus-backports main contrib non-free non-free-firmware
-deb https://sledjhamr.org/devuan/merged/                        excalibur          main
-deb https://devuan.planetcobalt.net/merged/                     daedalus-updates   main contrib non-free non-free-firmware
-deb https://mirror.ungleich.ch/mirror/packages/devuan/merged    daedalus-security  main contrib non-free non-free-firmware
+deb https://devuan.sedf.de/merged                            daedalus            main
+deb https://devuan.planetcobalt.net/merged                   excalibur           main contrib non-free non-free-firmware
+deb https://devuan.sedf.de/merged                            excalibur-backports main contrib non-free non-free-firmware
+deb https://devuan.keff.org/merged                           excalibur-updates   main contrib non-free non-free-firmware
+deb https://mirror.ungleich.ch/mirror/packages/devuan/merged excalibur-security  main contrib non-free non-free-firmware
+deb https://sledjhamr.org/devuan/merged                      freia               main contrib non-free non-free-firmware
 EOF
 
 
-cat > $TARGET/etc/apt/preferences.d/testing-packages <<EOF
+cat > $TARGET/etc/apt/preferences.d/oldstable-packages <<EOF
 Package: *
-Pin: release n=excalibur
+Pin: release n=daedalus
 Pin-Priority: -1
 
-Package: systemd-boot-efi
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: elogind
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: systemd-ukify
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: libelogind0
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: dnscrypt-proxy
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: libelogind-compat
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: tuned
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: pkexec
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: xsecurelock
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: polkitd
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: bash-completion
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: libpolkit-gobject-elogind-1-0
+Pin: release n=daedalus
+Pin-Priority: 1001
 
-Package: micro
-Pin: release n=excalibur
-Pin-Priority: 500
+Package: libpolkit-agent-1-0
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: libpam-elogind
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: libpam-modules
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: libpam-modules-bin
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: libpam-runtime
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: policykit-1
+Pin: release n=daedalus
+Pin-Priority: 100
+
+Package: polkitd-pkla
+Pin: release n=daedalus
+Pin-Priority: 100
+
+Package: policykit-1-gnome
+Pin: release n=daedalus
+Pin-Priority: 100
+
+Package: network-manager
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: libnm0
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: zenity
+Pin: release n=daedalus
+Pin-Priority: 1001
+
+Package: zenity-common
+Pin: release n=daedalus
+Pin-Priority: 1001
 EOF
 
 
 cat > $TARGET/etc/apt/preferences.d/backports-packages <<EOF
 Package: *
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: -1
 
-Package: tpm2-tss-engine-dev
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
-Package: libengine-tpm2-tss-openssl
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
 Package: linux-cpupower
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: libcpupower1
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: linux-perf
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
-Package: dunst
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
-Package: 7zip
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
-Package: 7zip-rar
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 EOF
 
 
 cat > $TARGET/etc/apt/preferences.d/backports-kernel <<EOF
 Package: *
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: -1
 
 Package: linux-image-*
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: linux-headers-*
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: linux-kbuild-*
-Pin: release n=daedalus-backports
-Pin-Priority: 500
-
-Package: linux-base
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 EOF
 
 
 cat > $TARGET/etc/apt/preferences.d/backports-firmware <<EOF
 Package: *
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: -1
 
 Package: firmware-linux
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: firmware-linux-nonfree
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: firmware-amd-graphics
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: firmware-misc-nonfree
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: firmware-mediatek
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
 Pin-Priority: 500
 
 Package: firmware-realtek
-Pin: release n=daedalus-backports
+Pin: release n=excalibur-backports
+Pin-Priority: 500
+EOF
+
+
+cat > $TARGET/etc/apt/preferences.d/testing-packages <<EOF
+Package: *
+Pin: release n=freia
+Pin-Priority: -1
+
+Package: amd64-microcode
+Pin: release n=freia
+Pin-Priority: 500
+
+Package: dnscrypt-proxy
+Pin: release n=freia
+Pin-Priority: 500
+
+Package: xss-lock
+Pin: release n=freia
 Pin-Priority: 500
 EOF

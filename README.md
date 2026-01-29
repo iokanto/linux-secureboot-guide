@@ -1,4 +1,4 @@
-This guide describe how set up system with detached LUKS header, Unified Kernel Image (UKI), Secure Boot with own keys and tpm2-totp in Devuan 5 (Debian 12) without systemd!
+This guide describe how set up system with detached LUKS header, Unified Kernel Image (UKI), Secure Boot with own keys and tpm2-totp in Devuan 6 (Debian 13) without systemd!
 
 **Now until disk partition setup system via install media**
 
@@ -162,10 +162,9 @@ Make correct rights to private/public keys and move them to another place
 ```
 sudo mkdir -p /usr/share/keyrings/efi/
 sudo mv /tmp/keys/* /usr/share/keyrings/efi/
-sudo chown -R root /usr/share/keyrings/efi/*
-sudo chgrp -R root /usr/share/keyrings/efi/*
-sudo chmod 0600 /usr/share/keyrings/efi/*
-sudo chmod 0600 /usr/share/keyrings/efi/
+sudo chown -R root:root /usr/share/keyrings/efi/*
+sudo chmod 0400 /usr/share/keyrings/efi/*
+sudo chmod 0400 /usr/share/keyrings/efi/
 ```
 
 Now you can edit */usr/local/sbin/generate-uki* and enable generating singed UKI images
