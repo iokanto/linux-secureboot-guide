@@ -120,6 +120,10 @@ Package: linux-image-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
 
+Package: linux-base-*
+Pin: release n=excalibur-backports
+Pin-Priority: 500
+
 Package: linux-headers-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
