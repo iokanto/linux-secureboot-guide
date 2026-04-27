@@ -116,11 +116,11 @@ Package: *
 Pin: release n=excalibur-backports
 Pin-Priority: -1
 
-Package: linux-image-*
+Package: linux-base-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
 
-Package: linux-base-*
+Package: linux-binary-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
 
@@ -128,7 +128,15 @@ Package: linux-headers-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
 
+Package: linux-image-*
+Pin: release n=excalibur-backports
+Pin-Priority: 500
+
 Package: linux-kbuild-*
+Pin: release n=excalibur-backports
+Pin-Priority: 500
+
+Package: linux-modules-*
 Pin: release n=excalibur-backports
 Pin-Priority: 500
 EOF
